@@ -1,0 +1,238 @@
+import { getAllConfigs, updateConfig } from '../../utils/db';
+
+// 检查是否已认证
+const isAuthenticated = Astro.cookies.has('admin_auth') && Astro.cookies.get('admin_auth')?.value === 'authenticated';
+
+// 如果未认证，重定向到登录页
+if (!isAuthenticated) {
+  return Astro.redirect('/admin/login');
+}
+
+// 获取配置
+const env = Astro.locals.runtime.env;
+let configs = [];
+let message = '';
+let isSuccess = false;
+
+if (env.DB) {
+  configs = await getAllConfigs(env.DB);
+}
+
+// 处理表单提交
+if (Astro.request.method === 'POST') {
+  try {
+    const formData = await Astro.request.formData();
+    
+    // 遍历所有表单字段并更新
+    for (const [key, value] of formData.entries()) {
+      if (key !== 'action') {
+        await updateConfig(env.DB, key, value.toString());
+      }
+    }
+    
+    // 重新获取更新后的配置
+    configs = await getAllConfigs(env.DB);
+    message = '配置更新成功！';
+    isSuccess = true;
+  } catch (error) {
+    message = `更新失败: ${error.message}`;
+    isSuccess = false;
+  }
+}
+
+// 转换配置列表为对象，方便模板使用
+const configMap = {};
+configs.forEach(config => {
+  configMap[config.key] = config.value;
+});
+
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>网站配置 - 韩小韩博客后台管理</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      background-color: #f8f9fa;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .header {
+      background-color: #01C4B6;
+      color: white;
+      padding: 15px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 1.5rem;
+    }
+    .nav {
+      display: flex;
+      gap: 20px;
+    }
+    .nav a {
+      color: white;
+      text-decoration: none;
+      padding: 5px 10px;
+      border-radius: 4px;
+      transition: background-color 0.3s;
+    }
+    .nav a:hover {
+      background-color: rgba(255, 255, 255, 0.2);
+    }
+    .card {
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .card h2 {
+      margin-top: 0;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+      color: #01C4B6;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 500;
+    }
+    .form-control {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      transition: border-color 0.3s;
+    }
+    .form-control:focus {
+      border-color: #01C4B6;
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(1, 196, 182, 0.2);
+    }
+    .btn {
+      background-color: #01C4B6;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 10px 20px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    .btn:hover {
+      background-color: #00a89c;
+    }
+    .logout {
+      background-color: transparent;
+      border: 1px solid white;
+      color: white;
+      padding: 5px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .logout:hover {
+      background-color: white;
+      color: #01C4B6;
+    }
+    .alert {
+      padding: 10px 15px;
+      border-radius: 4px;
+      margin-bottom: 20px;
+    }
+    .alert-success {
+      background-color: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+    .alert-danger {
+      background-color: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>韩小韩博客 - 后台管理</h1>
+    <div class="nav">
+      <a href="/admin">仪表盘</a>
+      <a href="/admin/config">网站配置</a>
+      <a href="/admin/links">友情链接</a>
+      <a href="/admin/talking">说说管理</a>
+      <a href="/admin/friends">朋友圈</a>
+      <form method="post" action="/admin" style="margin: 0;">
+        <input type="hidden" name="action" value="logout">
+        <button type="submit" class="logout">退出登录</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="card">
+      <h2>网站基本配置</h2>
+      
+      {message && (
+        <div class={`alert ${isSuccess ? 'alert-success' : 'alert-danger'}`}>
+          {message}
+        </div>
+      )}
+      
+      <form method="post">
+        <div class="form-group">
+          <label for="title">网站标题</label>
+          <input type="text" id="title" name="title" class="form-control" value={configMap.title || ''}>
+        </div>
+        
+        <div class="form-group">
+          <label for="site">网站地址</label>
+          <input type="text" id="site" name="site" class="form-control" value={configMap.site || ''}>
+        </div>
+        
+        <div class="form-group">
+          <label for="subtitle">网站副标题</label>
+          <input type="text" id="subtitle" name="subtitle" class="form-control" value={configMap.subtitle || ''}>
+        </div>
+        
+        <div class="form-group">
+          <label for="description">网站描述</label>
+          <textarea id="description" name="description" class="form-control" rows="3">{configMap.description || ''}</textarea>
+        </div>
+        
+        <div class="form-group">
+          <label for="author">网站作者</label>
+          <input type="text" id="author" name="author" class="form-control" value={configMap.author || ''}>
+        </div>
+        
+        <div class="form-group">
+          <label for="avatar">作者头像URL</label>
+          <input type="text" id="avatar" name="avatar" class="form-control" value={configMap.avatar || ''}>
+        </div>
+        
+        <div class="form-group">
+          <label for="motto">座右铭</label>
+          <input type="text" id="motto" name="motto" class="form-control" value={configMap.motto || ''}>
+        </div>
+        
+        <button type="submit" class="btn">保存配置</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html> 
